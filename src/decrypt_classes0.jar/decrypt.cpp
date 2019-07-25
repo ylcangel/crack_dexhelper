@@ -210,14 +210,14 @@ void decrypt_classes0jar(const char* file, const char* ofile) {
 	printf("off = %x\n", off);
 	len = read(fd, zname, zip_header->file_name_length);
 	printf("len = %lx\n", len);
-	f_off = decrypt(0, (unsigned char*)zname, zip_header->file_name_length);
+	f_off = decrypt(off, (unsigned char*)zname, zip_header->file_name_length);
 	memcpy(filebuf + off, zname, zip_header->file_name_length);
 
 	off = lseek(fd, 0, SEEK_CUR);
 	printf("off = %x\n", off);
 	len = read(fd, zex, zip_header->extra_field_len);
 	printf("len = %lx\n", len);
-	f_off = decrypt(0, (unsigned char*)zex, zip_header->extra_field_len);
+	f_off = decrypt(off, (unsigned char*)zex, zip_header->extra_field_len);
 	memcpy(filebuf + off, zex, zip_header->extra_field_len);
 
 	off = lseek(fd, 0, SEEK_CUR);
