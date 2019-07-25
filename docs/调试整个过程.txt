@@ -1,0 +1,1505 @@
+/**
+ * Author: sp00f
+ * 版权属于我个人所有，你可以转载，但需要标明出处
+ * 此文档只用于学习交流目的，用于其他目的本人概不负责
+ * 安全既是攻防，希望我所作能对防守的一方提供帮助
+ * 各个厂商思路同中有异，我逆向分析仅站在学习者和探测加固强度角度进行，没有针对任何特定厂商
+ * 我逆向的版本不是最新版本，甚至我都不知道是哪个版本，请大家多吸取精华，抛弃糟粕
+ * 你可以吐槽我，不过还是希望尊重我的辛苦成果，有不对的地方，可以指出，大家互相探讨
+ * 对于逆向我也是个小学生，水平有限，还请大佬们一笑而过
+ * 出于时间考虑，我分析完之后，没有对调试过程返回来看，但应该大致描述清楚了
+ * 如果纰漏，请见谅
+ *
+*/
+
+调试过程中，我手机加载Code地址区间 B3B76000 B3BD0000 R . X D . byte 00 public CODE 32 00 00
+==============================================================================================================
+init_array中包含一个p3FF1EB80BD8AFC5D4CECC835ED9EB850指向_Z33p3FF1EB80BD8AFC5D4CECC835ED9EB850v函数
+
+r11 = DexHelper.so:B3BD7068 unk_B3BD7068
+
+0x200大小buf，地址ACB279A0，调用getpid获取进程id，拼接/proc/pid/cmdline
+0x13大小buf, /proc/%d/cmdline
+DexHelper.so:B3B835F2 BLX             fopen_
+调用fopen打开/proc/pid/cmdline
+DexHelper.so:B3B837CC BLX             fgetc_
+读取包名xxxx
+malloc(0x19)
+DexHelper.so:B3B8361C BLX             fseek_
+fseek到文件开头的位置，解密出字符串%s
+DexHelper.so:B3B837B4 BLX             fread_
+fread读取0x18大小的数据，实际上就是读取包名
+DexHelper.so:B3B83656 BLX             fclose_
+调用fclose关闭文件/proc/pid/cmdline
+DexHelper.so:B3B836EC BLX             strlen_
+0x16大小buf，拷贝/system/bin/dex2oat，调用strlen获得上述字符串长度
+DexHelper.so:B3B836F6 BLX             strncmp_
+和之前得到的包名进行对比，退出init_array
+
+===============================================================================================================
+JNI_OnLoad
+
+B3BD7544 cpuabi
+
+1、拷贝cpuabi为arm，DexHelper.so:B3BD7544 cpuabi_ DCB "arm",
+   F大小buf，拷贝DexHelper到DexHelper.so:B3BD7520 selfSoName处
+
+2、1F大小buf解密得到字符串com/secneo/apkwrapper/Helper，进入第二次自旋后
+   p_unkown1_ = punkown1_;
+  *(_BYTE *)(punkown1_ + 1040) = *(_BYTE *)(p_unkown2_ + 916) ^ 0xA;// 0x25 对应ascii码 %
+  *(_BYTE *)(p_unkown1_ + 1042) = *(_BYTE *)(p_unkown2_ + 918) ^ 6;// 0x0
+  *(_BYTE *)(p_unkown1_ + 1041) = *(_BYTE *)(p_unkown2_ + 917) ^ 0x1B;// 0x73对应ascii码 s
+  *(_DWORD *)(p_unkown1_ + 1036) = 2;
+  
+  unkown1 DexHelper.so:B3BD7068 sprintf后变为com/secneo/apkwrapper/Helper
+  unkown2 DexHelper.so:B3BCDDA8
+  unkown3
+
+3、调用art.so的art::CheckJII::GetEnv(_JavaVM *, void **, int)
+	走段垃圾代码
+	
+	
+4、A大小buf，解密字符串libc.so, dlopen libc.so
+5、B大小buf，解密字符串mprotect，调用dlsym，获得地址保存在p0F361DAD31B1C41A7A991D8C2635AE00指针数组第5项
+6、7大小buf，解密字符串mmap，调用dlsym，获得地址保存在p0F361DAD31B1C41A7A991D8C2635AE00指针数组第4项
+7、9大小buf，解密字符串munmap，调用dlsym，获得地址保存在p0F361DAD31B1C41A7A991D8C2635AE00指针数组第3项
+
+
+8、调用FindClass(_JNIEnv *, char const*)查找com/secneo/apkwrapper/Helper,返回019指向该jclass
+
+9、A大小buf，拷贝PKGNAME
+
+10、0x15大小buf，拷贝Ljava/lang/String;
+
+11、调用GetStaticFieldID获取com/secneo/apkwrapper/Helper的String类型PKGNAME字段，
+	调用GetStaticObjectField获得PKGNAME对应的jobject
+	
+12、调用GetStringUTFChars，得到被加固的pkgname（包名）
+	把包名拷贝到DexHelper.so:B3BD78D8 p7FCE8A8636943BF23A6C9414B89AB96A处
+
+13、0x1d大小buf，拷贝android/app/ActivityThread，然后调用FindClass，返回00200021
+14、0x18大小buf，拷贝currentActivityThread,
+
+15、拷贝0x21大小buf，拷贝()Landroid/app/ActivityThread;
+	调用GetStaticMethodID后又调用CallStaticObjectMethod，获得ActivityThread实例，返回00000025
+	
+	
+16、0x13大小buf，拷贝getSystemContext
+17、0x1e大小buf，拷贝()Landroid/app/ContextImpl;,调用GetMethodID后调用CallObjectMethod返回00100029
+19、0x1a大小buf，拷贝android/app/ContextImpl，调用FindClass，获得Context class 0000002D
+
+
+20、0x14大小buf，拷贝getPackageManager
+21、0x28大小buf，拷贝()Landroid/content/pm/PackageManager;,调用GetMethodID
+	调用CallStaticObjectMethod获得PackageManager对象00200031
+	在调用GetObjectClass获得PackageManager class 00200035
+	
+	
+22、0x11大小buf，拷贝getPackageInfo，创建一个包含包名的NewStringUTF
+23、0x38大小buf，拷贝(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;
+	调用GetMethodID，在调用CallObjectMethod获得PackageInfo的对象0000003D
+	在调用GetObjectClass，获得PackageInfo的class 00200041
+	
+	
+24、0x12大小buf，拷贝applicationInfo
+
+25、0x27大小buf，拷贝Landroid/content/pm/ApplicationInfo;
+	调用GetObjectFieldID，在调用GetObjectField得到ApplicationInfo对象00100045
+	在调用GetObjectClass，获得ApplicationInfo的class 00200049
+	
+26、0xc大小buf，拷贝sourceDir
+27、0x15大小buf，拷贝Ljava/lang/String;
+	调用GetFieldID，在调用GetObjectField获得该sourceDir对象0020004D
+	在调用GetStringUTFChars获得sourceDir的值/data/app/xxxx-1/base.apk
+	
+	
+28、0xa大小buf，拷贝dataDir
+29、0x15大小buf，拷贝Ljava/lang/String;
+	调用GetFieldID，在调用GetObjectField获得dataDir对象 00200051
+	在调用GetStringUTFChars获得dataDir的值为/data/data/xxxx
+	
+	
+30、调用strcpy拷贝dataDir的值到p7602F63CA206D2EEF069F031F9D6C8EF
+	调用strlen得到该dataDir对应字符串长度
+	对比dataDir对应字符串最后一个字符是否/，如果不是/，在app对应数据路径后加/
+	
+
+31、0x19大小buf，拷贝android/os/Environment，然后调用FindClass找到该类00000055
+32、0x1e大小buf，拷贝getExternalStorageDirectory
+33、0x13大小buf，拷贝()Ljava/io/File;，然后调用GetStaticMethodID，
+	在调用CallStaticObjectMethod得到File对象
+	该函数声明如下：static File	getExternalStorageDirectory()
+		
+		
+34、0xf大小的buf，拷贝java/io/File，调用FindClass获取其Class
+35、0xa大小buf，拷贝getPath
+36、0x17大小buf，拷贝()Ljava/lang/String;
+	调用GetMethodID，调用CallObjectMethod，在调用GetStringUTFChars，得到SD卡路径/storage/emulated/0
+37、把sd卡路径拷贝到DexHelper.so:B3BD7758 pD8A67091FF5D0E411CA9AEAFBBCDC2E2
+	判断路径末尾是否为/，如不为/在末尾添加/
+
+
+38、调用 sub_B3B870FC函数，此处获取sdk version
+	0x5c大小buf，调用 __system_property_get，获得sdk version
+	0x17大小buf，拷贝ro.build.version.sdk，我这里是0x15
+	然后和其他版本0x17(对应版本6.0)0x18, 0x19比较，因为不匹配不走分支流程
+	然后直接退出
+	
+
+39、如果sdk version大于8，0x13大小buf，获得字符串nativeLibraryDir
+40、0x15大小buf，拷贝Ljava/lang/String;
+	调用JNI相关略，得到ApplicationInfo的nativeLibraryDir为/data/app/xxx-1/lib/arm
+	DexHelper.so:B3BD7A5C ; _BYTE *p0F361DAD31B1C41A7A991D8C2635AE00[361]是一个包含361个指针的指针数组
+	p0F361DAD31B1C41A7A991D8C2635AE00[1]的指针指向保存着nativeLibraryDir的地址
+	
+	
+41、调用getpid获得进程id，解密得到字符串/proc/%d/fd
+	调用spintf得到字符串/proc/pid/fd，pid为getpid获取的实际进程号
+	调用opendir打开这个路径得到DIR*
+	
+42、0x11大小buf，解密字符串/proc/%d/fd/%d
+	0x7大小buf，解密字符串.apk，在调用readdir64得到相应的目录项dirent64*
+	经过转换调用sprintf得到/proc/[pid]/fd/0
+	
+43、调用readlink，读取/proc/[pid]/fd/0,得到符号链接名，第一个是/dev/null
+44、两次调用strstr同时满足该符号链接包含加固包名和.apk停止readlink
+	找到后调用closedir关闭DIR
+	最终找到符号链接为/data/app/xxxx-1/base.apk
+	
+45、调用malloc把这个类似/data/app/xxxx-1/base.apk这样的字符串放入内存debug010:ACB67DF0
+	然后把这个指针赋值给p0F361DAD31B1C41A7A991D8C2635AE00的指针数组的第1项
+	
+	
+	
+46、在解密出一个字符串/s，和45处获得的字符串比较返回1，后面执行赋值
+	pC5F2A82FA1DC517013B88F878F4AAC8B = __clz(strcmpv_) >> 5; // 等于0
+
+
+47、0xe大小buf，拷贝SECNEOMPASS，调用FindClass com/secneo/apkwrapper/Helper
+48、0xa大小buf，拷贝ISMPASS
+	0x15大小buf，拷贝Ljava/lang/String;
+	通过JNI方法得到值为SECNEOMPASS
+	调用strlen得到其长度，在调用strncmp和栈上SECNEOMPASS对比
+	给DexHelper.so:B3BD7740 g_adapterMpass赋值
+	g_adapterMpass = 0
+	
+	
+49、调用sub_B3B87C98，主要判断是否支持art，是否是三星手机，是否是阿里云手机
+	调用sub_B3B870FC函数(见38)
+	在p252FCA0321C9E66AF72ED1725BEFAE48处保存sdk version
+	0x18大小buf，拷贝/system/lib/libdvm.so，然后调用access判断文件是否存在
+	0x18大小buf，拷贝/system/lib/libart.so，继续调用access
+	给p988650A47282C519A5A90160C60342B6 赋值1，该标记应该是是否支持art的标记
+	0x5c大小buf，没看见用到，继续调用sub_B3B870FC获取sdk version，赋值g_isSamsung71 = 0
+	0x9大小buf，拷贝libart
+	获取ro.yunos.version，ro.yunos.version.release值，并赋值到DexHelper.so:B3BCE16C unk_B3BCE16C
+	最后p8AB37647D123DBD31A207875FA331976赋值0，该标记是是否是yunos的标记
+	
+	
+50、调用sub_B3B87C98过程进入函数sub_B3B875B4
+	先得到 %s， %s/%s两个字符串
+	0x9大小buf，拷贝字符串.cache到DexHelper.so:B3BD7564 p8963D98AC54524D48315BE91CC3E9E0D处
+	得到字符串oat，拷贝到DexHelper.so:B3BD7554 pB186568525CE85A068904BC79E0C45BB处
+	sprintf得到一个字符串.cache
+	0x16大小buf，拷贝assets/classes0.jar,sprintf得到字符串assets/classes0.jar
+	0xe大小buf，拷贝classes.jar，sprintf得到字符串.cache/classes.jar
+	0xe大小buf，拷贝classes.dex，sprintf得到字符串.cache/classes.dex
+	取全局数组byte_B3BD2045[8]的值为5，这个值代表有5个dex，这个数组被我重命名为global_bytearray_
+	赋值p53AF5DD854A8CAADD32CDB9BF8F527BD = 5，该值表示dex数目
+	DexHelper.so:B3BD7634 is_multidex赋值为true
+	
+	0x9大小，拷贝%s%d%s
+	0xc大小，拷贝%s/%s%d%s
+
+	while( i=1++ < dexsize) { // i从1开始， 我这里dexsize = 5
+
+		每次都开辟3个128字节的空间（malloc），然后执行
+		*(char*)(4 * i + B3B6763C) = malloc_(128); // v1，p16E3A5B7FDBBA8027975621D4DC82B43地址为B3BD763C
+		*(char*)(4 * i + B3BD76BC) = malloc_(128); // v2
+		*(char*)(4 * i + B3BD76FC) = malloc_(128); // v3
+		
+		获取字符串assets/classes，sprintf字符串assets/classes2.jar到v1处
+		获取字符串classes，spintf字符串cache/classes2.jar到v2处
+		判断sdk version走分支（这里无关紧要）
+		获取字符串classes，spintf字符串.cache/classes2.dex到v3处
+		
+		N = i + 1,i 从1起,N从2起 
+		第一个空间：
+		assets/classesN.jar
+		第二个空间：
+		.cache/classesN.jar
+		第三个空间：
+		.cache/classesN.dex
+	}
+	
+	
+51、从sub_B3B875B4返回继续执行sub_B3B87C98
+	0x100大小buf，sprintf得到字符串/data/data/包名/.cache
+	调用access判断文件是否存在，不存在调用mkdir创建
+	
+	执行类似代码，// 不明白这块干什么
+	v118 = v182 - 3 * ((unsigned int)(43691 * v182) >> 17);
+	v187 = global_bytearray_[9] & 1; // 0x20 & 1 = 0
+	v197 = global_bytearray_[2] & 0x20; // 0 & 20 = 0
+	if ( global_bytearray_[2] << 31 >= 0 )
+	  v109 = 4 - v118; // 执行这里=3
+	else
+	  v109 = 5 - v118;
+	
+	最后设置dword_B3BD7458为0
+	一堆混淆跳转后走到DexHelper.so:B3B95D8E BL  sub_B3B88388 （我给命名为isX86abi）
+	0x15大小buf，拷贝ro.product.cpu.abi
+	通过__system_property_get得到我手机的值为armeabi-v7a
+	调用strcasestr和x86对比看是否是x86平台
+	
+	E6D8122F = 0 // 不是x86
+	
+	
+52、DexHelper.so:B3B945FE BLX             memset_0
+	sprintf得到字符串/data/data/包名/.cache
+	sprintf得到字符串/data/data/xxxx/.cache/oat/arm
+	sprintf得到字符串/data/data/xxxx/.cache/classes.dve
+	
+53、DexHelper.so:B3B946FC BLX             memset_0
+	0x10大小buf，拷贝/proc/%d/maps
+	调用getpid获取进程id
+	sprintf得到/proc/具体pid/maps
+	调用fopen打开/proc/pid/maps
+	循环调用fgets来一行一行都
+	调用strstr比较该字符串是否包含包名
+	如果包含继续调用strstr比较是否包含.cache字符串
+	如果不包含.cache，取该字符串后三位和字符串dex进行比较取得包含dex的那一行
+	从该字符串后面往前到第一个空格之后的字符
+	最终得到line = /data/dalvik-cache/arm/data@app@xxxx-1@base.apk@classes.dex
+	调用sscanf(line, "%s", &tmp)，得到tmp为line对应的字符串
+	调用fclose关闭/proc/pid/maps句柄
+	调用open打开/data/dalvik-cache/arm/data@app@xxxx-1@base.apk@classes.dex得到文件fd为00000018
+	调用fstat传入open打开的fd，获取该文件对应stat
+	调用close关闭之前open打开的fd，没注意到stat在哪里用呀
+	
+	55656B59保存到栈上[stack]:BE8C58A8 DCD 0x55656B59
+	
+	
+54、走到这里，这里涉及到md5算法sub_B3B84010，实际上就是md5update
+	DexHelper.so:B3B94816 LDR             R3, =0x67452301
+	DexHelper.so:B3B94818 MOVS            R5, #0
+	DexHelper.so:B3B9481A STR.W           R5, [SP,#0x9F0]
+	DexHelper.so:B3B9481E ADDW            R7, SP, #0x9EC
+	DexHelper.so:B3B94822 STR.W           R5, [SP,#0x9EC]
+	DexHelper.so:B3B94826 MOVS            R2, #0x40
+	DexHelper.so:B3B94828 STR.W           R3, [SP,#0x9F4]
+	DexHelper.so:B3B9482C ADD.W           R3, R3, #0x88888888
+	DexHelper.so:B3B94830 STR.W           R3, [SP,#0x9F8]
+	DexHelper.so:B3B94834 ADD.W           R3, R3, #0xA9000000
+	DexHelper.so:B3B94838 SUB.W           R3, R3, #0x12C000
+	DexHelper.so:B3B9483C MOV             R0, R7
+	DexHelper.so:B3B9483E SUBW            R3, R3, #0xE8B
+	DexHelper.so:B3B94842 STR.W           R3, [SP,#0x9FC]
+	DexHelper.so:B3B94846 SUB.W           R3, R3, #0x88888888
+	DexHelper.so:B3B9484A STR.W           R3, [SP,#0xA00]
+	DexHelper.so:B3B9484E LDR             R3, =0xFFFFFC78
+	DexHelper.so:B3B94850 ADDW            R8, SP, #0x5EC
+	DexHelper.so:B3B94854 LDR.W           R6, [R11,R3]
+	DexHelper.so:B3B94858 MOV             R1, R6
+	DexHelper.so:B3B9485A BL              sub_B3B84010 
+	{ // 切记不要被被0x88888888、0xA9000000这两个数迷惑，你用这两个数搜会搜出aes加密算法
+		
+		传入参数： r0 = BE8C625C
+				   r1 = global_bytearray_+ 0x23 (35)
+				   r2 = 0x40, 64字节大小
+		
+		数据从global_bytearray_+ 0x23开始截止到 global_bytearray_+ 0x23 + 0x40，共64字节 （保存在sec0.txt文件中）
+		需要对这64个字节进行md5计算
+		按小端读取，之前根本没认真看是md5，基本把md5逆向了一遍，后来在通过那几个状态数去搜验证了是md5算法
+		
+		[stack]:BE8C625C DCD 0                                   ; MD5_CTX struct
+		[stack]:BE8C6260 DCD 0
+		[stack]:BE8C6264 DCD 0x67452301
+		[stack]:BE8C6268 DCD 0xEFCDAB89
+		[stack]:BE8C626C DCD 0x98BADCFE
+		[stack]:BE8C6270 DCD 0x10325476
+		
+		SEC[
+			v1 = 0,
+			v2 = 0,
+			v3 = 0x67452301, // 下面4个数为md5状态变量，魔术
+			v4 = 0xEFCDAB89,
+			v5 = 0x98BADCFE,
+			v6 = 0x10325476,
+			char [64] v7 = 待计算md5的数据buf，第一次为64字节数据，保存在sec0.txt中
+			char [16] md5, // 最后保存计算后的md5值，偏移是v3 + 0x50
+		]
+		
+		char* seaddr = v7;
+		void* secdata; //需要初始化
+		// 其实就是按照小端把之前的64bit读出来，读取完之后为：
+		secdata = [ 
+			0x3D060100,
+			0xACBCE224,
+			0x9721AAAF,
+			0x952696D3,
+			0x2F5D94D6,
+			0x1B4D94F8,
+			0x2919,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0
+		]
+			
+		int i = 0; 
+		do { // 实际上做decode操作
+		
+			unsigned int a = *(seaddr + 2);
+			unsigned int b = *(seaddr + 3);
+			unsigned int c = *(seaddr + 1);
+			unsigned int d = *(seaddr);
+			*(secdata + i) = (a << 16) | (b << 24) | c | (d << 8);
+			seaddr++;
+			
+			++i;
+		} while (i != 16)
+	}
+	
+	函数的前部分主要是把输入指定长度的buf按小端重新读取到数组中，函数后部分为更新MD5_CTX的状态值
+	[stack]:BE8C625C DCD 200                                   ; MD5_CTX struct
+	[stack]:BE8C6260 DCD 0
+	[stack]:BE8C6264 DCD 0xC6122D39
+	[stack]:BE8C6268 DCD 0xEF7368A2
+	[stack]:BE8C626C DCD 0x91F46993
+	[stack]:BE8C6270 DCD 0xE1EAF622
+	
+	SEC[
+		v1 = 0x200,
+		v2 = 0,
+		v3 = 0xC6122D39, // 下面4个数为md5新状态变量
+		v4 = 0xEF7368A2,
+		v5 = 0x91F46993,
+		v6 = 0xE1EAF622,
+		char [64] v7 = 待计算md5的数据buf，第一次64字节，第二次为56字节
+		char [16] md5, // 保存计算后的md5值
+	]
+	
+	
+55、调用md5Final
+	DexHelper.so:B3B94862 BL  md5Final_ // 已经被我重命名(逆向到这里，我已经识别出是md5了)
+	再次调用md5Update，这次传递的len为56，该56字节为md5运算需要的padding
+	
+	[stack]:BE8C5820 DCD 0x80
+	[stack]:BE8C5824 DCD 0
+	[stack]:BE8C5828 DCD 0
+	[stack]:BE8C582C DCD 0
+	[stack]:BE8C5830 DCD 0
+	[stack]:BE8C5834 DCD 0
+	[stack]:BE8C5838 DCD 0
+	[stack]:BE8C583C DCD 0
+	[stack]:BE8C5840 DCD 0
+	[stack]:BE8C5844 DCD 0
+	[stack]:BE8C5848 DCD 0
+	[stack]:BE8C584C DCD 0
+	[stack]:BE8C5850 DCD 0
+	[stack]:BE8C5854 DCD 0
+	这里不再描述
+	
+	[stack]:BE8C625C DCD 0x3C0                               ; MD5_CTX struct
+	[stack]:BE8C6260 DCD 0
+	[stack]:BE8C6264 DCD 0xC6122D39
+	[stack]:BE8C6268 DCD 0xEF7368A2
+	[stack]:BE8C626C DCD 0x91F46993
+	[stack]:BE8C6270 DCD 0xE1EAF622
+	[stack]:BE8C6274 DCD 0x80
+	[stack]:BE8C6278 DCD 0
+	……
+	
+	计算最终结果
+	
+	[stack]:BE8C625C DCD 0x3C0                               ; MD5_CTX struct
+	[stack]:BE8C6260 DCD 0
+	[stack]:BE8C6264 DCD 0x9FB34463 // 从此处开始是md5
+	[stack]:BE8C6268 DCD 0xEC8B7D08
+	[stack]:BE8C626C DCD 0xBD7CDE50
+	[stack]:BE8C6270 DCD 0xC292E74D
+
+
+56、把计算出来的md5以小端读出存入在MD5_CTX struct的md5的buf中
+	md5为：63 44 B3 9F 08 7D 8B EC  50 DE 7C BD 4D E7 92 C2 // 不同加固app可能不一样
+	然后保存在global_bytearray_[0x23]开始的16个字节处
+	继续在global_bytearray_[0x33]处保存59 6B 65 55，这四个字节是变化的，可能是时间戳
+	
+	
+57、判断/data/data/xxxx/.cache/classes.dve文件是否存在，返回-1不存在
+	进入到DexHelper.so:B3B87440 loc_B3B87440
+	
+	传入参数：
+	r0 = /data/data/xxxx/.cache
+	r1 = /data/data/xxxx/.cache/classes.dve
+	
+	调用opendir打开/data/data/xxxx/.cache
+	得到字符串%s/%s
+	循环调用readdir64得到目录项
+	得到目录调用strcmp先和.比较相等继续读取，在和..比较为零继续读取，后面就没有了？？感觉应该是判断是否存在吧
+	调用closedir关闭目录
+	
+	再次进入B3B87440
+	这次打开/data/data/xxxx/.cache/oat/arm，判断不存在，而这次几乎没执行什么逻辑就退出
+	
+	从B3B87440返回进入函数sub_B3B882BC
+	DexHelper.so:B3B948E8 BL              sub_B3B882BC
+	得到字符串classes.dve，sprintf拼接字符串/data/data/xxxx/.cache/classes.dve
+	调用fopen以可写方式创建文件，把之前计算的md5(global_bytearray_[0x23]开始的24个字节）写入该文件
+	调用fclose关闭该文件。
+	
+	如果文件存在就读取该文件16位md5，然后和保存栈上计算出来的值做对比。设置4C428728
+	不存在创建后为2，不相等在创建为1，相等为0
+	获得DexHelper.so:B3BD2045地址，取得log标记位，判断是否打开标记，如果打开输入log，如果设置errerno标记设置errirno
+	
+	读取global_bytearray_[2] << 30，没啥用和混淆相关
+	
+	
+58、注册native methods，B3B88584，被重命名为regNatives)进入函数，得到四个native函数声明：
+
+	DexHelper.so:B3BD7110 dword_B3BD7110 DCD 0xBE8C5760           ; DATA XREF: sub_B3B88584+19Cw
+	DexHelper.so:B3BD7114 dword_B3BD7114 DCD 0xBE8C57C0           ; DATA XREF: sub_B3B88584+194w
+	DexHelper.so:B3BD7118 dword_B3BD7118 DCD 0xB3B8B75D           ; DATA XREF: sub_B3B88584+1B0w
+	DexHelper.so:B3BD711C dword_B3BD711C DCD 0xBE8C5754           ; DATA XREF: sub_B3B88584+1F0w
+	DexHelper.so:B3BD7120 dword_B3BD7120 DCD 0xBE8C5758           ; DATA XREF: sub_B3B88584+1F6w
+	DexHelper.so:B3BD7124 dword_B3BD7124 DCD 0xB3B89629           ; DATA XREF: sub_B3B88584+200w
+	DexHelper.so:B3BD7128 dword_B3BD7128 DCD 0xBE8C576C           ; DATA XREF: sub_B3B88584+32Ew
+	DexHelper.so:B3BD712C dword_B3BD712C DCD 0xBE8C5794           ; DATA XREF: sub_B3B88584+334w
+	DexHelper.so:B3BD7130 dword_B3BD7130 DCD 0xB3B8EDB1           ; DATA XREF: sub_B3B88584+33Ew
+	DexHelper.so:B3BD7134 dword_B3BD7134 DCD 0xBE8C5778           ; DATA XREF: sub_B3B88584+580w
+	DexHelper.so:B3BD7138 dword_B3BD7138 DCD 0xBE8C57F8           ; DATA XREF: sub_B3B88584+584w
+	DexHelper.so:B3BD713C dword_B3BD713C DCD 0xB3B8F36D           ; DATA XREF: sub_B3B88584+58Ew
+	attach、(Landroid/app/Application;Landroid/content/Context;)V， 对应native地址0xB3B8B75D
+	_Z33p20DC9484C904CFAAA3CAAC3F62960581P7_JNIEnvP8_jobjectS2_S2_
+
+	{
+		先调用android/app/Application的attach
+		后又切换context（没细看，大致猜测）
+	}
+
+
+	h、()V，对应native函数地址0xB3B89629
+	_Z18huaweishareFromJNIP7_JNIEnvP8_jobject
+
+	{
+		大致感觉是适配华为，华为改了JNIEnv
+	}
+
+
+	azbycx、(Ljava/lang/String;)Ljava/lang/String;，对应native函数地址0xB3B8EDB1
+	_Z8handDataP7_JNIEnvP7_jclassP8_jstring
+	{
+		根据导出函数名推断可能是处理数据的
+	}
+
+	makeInMemoryDexElements、(Ljava/lang/Object;Ljava/util/List;Ljava/lang/String;)[Ljava/lang/Object;
+	对应native函数地址0xB3B8F36D
+	_Z23makeInMemoryDexElementsP7_JNIEnvP7_jclassP8_jobjectS4_P8_jstring
+	{
+		函数如其名，感觉像在内存中造假dex的
+	}
+
+	调用FindClass查找com/secneo/apkwrapper/Helper
+	然后调用RegisterNatives注册com/secneo/apkwrapper/Helper的这4个native函数
+
+	判断p0CB2C67BC75D6FEF5C743B73F7B7564F是否为true，暂时没发现做什么
+	
+
+59、拼接字符串/data/data/xxxx/.cache/classes.jar
+	拼接字符串/data/data/xxxx/.cache/classes.dex，
+	判断是否支持art，是否sdk version小于等于19， 是否阿里云系统
+	走分支
+	
+60、进入sub_B3B8B944函数(重命名为getAssetManager_)，实际就是通过反射得到AssetManager对象
+	DexHelper.so:B3B949A6 BL    sub_B3B8B944
+	0x1d大小buf，拷贝android/app/ActivityThread，调用FindClass返回00200075
+	0x18大小buf，拷贝currentActivityThread
+	0x21大小buf，拷贝()Landroid/app/ActivityThread;
+	调用GetStaticMethod和CallStaticObjectMethod获得android/app/ActivityThread对象 00200079
+	调用NewStringUTF创建字符串（应用包名packageName，xxxx） 0x20007D
+	0xc大小buf，拷贝mPackages，调用NewStringUTF创建包含该字符串的StringUTF 00200081
+	
+	
+61、执行sub_B3B8B944，进入sub_B3B88E30函数(重命名为getLoadedApk_mpackages_）
+	实际就是反射得到ActivityThread类的final ArrayMap<String, WeakReference<LoadedApk>> mPackages
+	DexHelper.so:B3B8BBE8 BL    sub_B3B88E30
+	0x12大小buf，拷贝java/lang/Class，调用FindClass返回00200085
+	0x14大小buf，拷贝getDeclaredFields
+	0x1f大小buf，拷贝()[Ljava/lang/reflect/Field;，调用GetMethodID，CallObjectMethod
+	获取ActivityThread定义的Field数组(传入的jclass是ActivityThread对应的Class ) 00200089
+	调用GetArrayLength获取数组长度（0x46）
+	0x1a大小buf，拷贝java/lang/reflect/Field，调用FindClass
+	0xf大小buf，拷贝isAccessible，在获得字符串()Z，调用GetMethodID，获得MethodID
+	0X10大小buf，拷贝setAccessible
+	0x7大小buf，拷贝(Z)V，调用GetMethodID，获得MethodID
+	0xa大小buf，拷贝getName
+	0x17大小buf，拷贝()Ljava/lang/String;，调用GetMethodID获得Field的getName对应的methodID
+	0x13大小buf，拷贝java/lang/String，调用FindClass
+	0x9大小buf，拷贝equals
+	0x18大小buf，拷贝(Ljava/lang/Object;)Z，调用GetMethodID，获取methodID
+	循环调用调用GetObjectArrayElement获取对应Object， 然后调用CallBooleanMethod，传入isAccessible methodID，来得到该
+	obj是否是私有的，如果不是私有的通过调用setAccessible方法设置该obj可访问属性，继续调用getName获取成员变量对应名字
+	在调用CallBooleanMethod传入equals methodID和函数开始传入的mPackages对比得到相等的那个字段对象
+	（对应final ArrayMap<String, WeakReference<LoadedApk>> mPackages）
+	 
+	 
+62、0x1a大小buf，拷贝java/lang/reflect/Field，调用FindClass
+	拷贝get，0x29大小buf，拷贝(Ljava/lang/Object;)Ljava/lang/Object;，调用GetMethodID获取Field的get方法ID
+	调用CallObjectMethod，传入参数curretntActivityThread，{61}中获取的obj和Field的get methodID，继续调用GetObjectClass
+	得到对应的ArrayMap的class对象
+	拷贝get，0x29大小buf，拷贝(Ljava/lang/Object;)Ljava/lang/Object;，调用GetMethodID获取Field的get方法ID
+	调用CallObjectMethod，传入key为包名，得到对应包名的WeakReference<LoadedApk>对象
+	0x1e大小buf，拷贝java/lang/ref/WeakReference(避免内存泄漏的），调用FindClass得到其对应Class对象
+	拷贝get，0x17大小buf，拷贝()Ljava/lang/Object;，调用GetMethodID获取WeakReference对应class的get方法id
+	调用CallObjectMethod获取里面的LoadApk对象
+	0x18大小buf，拷贝android/app/LoadedApk，调用FindClass获取其对应class
+	0xd大小buf，拷贝mResources
+	0x22大小buf，拷贝Landroid/content/res/Resources;，然后调用GetFieldID和GetObjectField获取mResources
+	0x20大小buf，拷贝android/content/res/Resources，调用FindClass找到其对应Class
+	0xc大小buf，拷贝getAssets
+	0x27大小buf，拷贝()Landroid/content/res/AssetManager;，调用GetMethodID和CallObjectMethod获取AssetManager对象返回
+
+
+63、DexHelper.so:B3B949C8 BLX             _AAssetManager_fromJava
+	拼接/data/data/xxxx/.cache/classes.jar,然后调用access判断文件是否存在
+	调用AAssetManager_fromJava获取native层AAssetManager，调用AssetManager_open打开classes0.jar，调用
+	AAsset_getLength和AAsset_getBuffer获取长度(00756299)和对应buf
+	然后调用open创建/data/data/xxxx/.cache/classes.jar这个文件
+	执行写write把其写入文件/data/data/xxxx/.cache/classes.jar中
+	调用AAssetClose关闭打开的资源文件
+	读取global_bytearray_[0]的值如果为false
+	获得global_pointer_array[0]即/data/app/xxxx-1/base.apk
+	走一个垃圾代码DexHelper.so:B3B94A32 BL   trashcode1
+	
+	
+64、进入DexHelper.so:B3B94A44 BLX   R3，计算global_bytearray_[0x2287 + 0x10]
+	即global_bytearray_[0x2297]开始的0x1000大小数据的md5
+	R3 = DexHelper.so:B3BA5D74 p24258C3E8FCFD426C7766805EE1BAD39
+
+	global_bytearray_ = B3BD2045
+	r5 = B3BD42DC = global_bytearray_[0x2287 + 0x10] 
+	r6 = B3BD42CC = global_bytearray_[0x2287] 
+	r5 - r6 = 0x10 // B3BD42CC开始的16个字节67 5F 72 6B 65 79 75 6D  46 69 6C 65 30 30 30 31 // 此处未使用
+	
+	进入混淆的md5update
+	DexHelper.so:B3BA61B6 BL  mix_md5Update
+	传入参数：
+	r0 = BE8C57DC // MD5_CTX
+	r1 = B3BD42DC // buf  // 1C AB F3 64 8C F6 63 56  9C 5D 43 FA 1F 1D 57 D0 ……
+	r2 = 00001000
+	
+	[stack]:BE8C57DC DCD 0                                   ; MD5_CTX
+	[stack]:BE8C57E0 DCD 0
+	[stack]:BE8C57E4 DCD 0x67452301
+	[stack]:BE8C57E8 DCD 0xEFCDAB89
+	[stack]:BE8C57EC DCD 0x98BADCFE
+	[stack]:BE8C57F0 DCD 0x10325476
+
+	md5 update后
+	[stack]:BE8C57DC DCD 0x8000                              ; MD5_CTX
+	[stack]:BE8C57E0 DCD 0
+	[stack]:BE8C57E4 DCD 0x612655FE
+	[stack]:BE8C57E8 DCD 0x44065BA
+	[stack]:BE8C57EC DCD 0xE5F46483
+	[stack]:BE8C57F0 DCD 0x2CCEC1D6
+	
+	循环了14次，每次移动4个字节，拷贝md5 padding到栈上BE8C577C开始的56个字节处
+	[stack]:BE8C577C DCD 0x80      ; cpy padding
+	……
+	md5Final逻辑
+	调用md5Transform，传入之前的md5 state和栈上的padding地址BE8C577C，得到最终md5
+	[stack]:BE8C57DC DCD 0x81C0                              ; MD5_CTX
+	[stack]:BE8C57E0 DCD 0
+	[stack]:BE8C57E4 DCD 0x6BD0A50C // 最终md5
+	[stack]:BE8C57E8 DCD 0x7BE67C7D
+	[stack]:BE8C57EC DCD 0x45CE1C59
+	[stack]:BE8C57F0 DCD 0xEEC5B974
+	
+	把该md5值拷贝到MD5_CTX的md5字节数组中，起始地址[stack]:BE8C5834
+	
+	BE8C5828  00 00 00 00 D4 C6 5E 53  C2 08 19 DF 0C A5 D0 6B
+	BE8C5838  7D 7C E6 7B 59 1C CE 45  74 B9 C5 EE 2F 12 D8 E6
+	BE8C5848  01 00 00 00 20 7E B6 AC  01 00 00 00 99 62 75 00
+
+	把md5值拷贝到栈上BE8C57BC起始的16字节处
+	[stack]:BE8C57BC DCD 0x6BD0A50C                          ; cpy md5
+	[stack]:BE8C57C0 DCD 0x7BE67C7D
+	[stack]:BE8C57C4 DCD 0x45CE1C59
+	[stack]:BE8C57C8 DCD 0xEEC5B974
+	
+	
+	malloc 0x50大小buf AD2ACD80，循环20次对该buf填入数据
+	DexHelper.so:B3BA611E BLX             malloc_
+	[ // 0x50buf， 斐波那契数呀
+		debug024:AD2ACD80 DCD 0
+		debug024:AD2ACD84 DCD 1
+		debug024:AD2ACD88 DCD 1
+		debug024:AD2ACD8C DCD 2
+		debug024:AD2ACD90 DCD 3
+		debug024:AD2ACD94 DCD 5
+		debug024:AD2ACD98 DCD 8
+		debug024:AD2ACD9C DCD 0xD
+		debug024:AD2ACDA0 DCD 0x15
+		debug024:AD2ACDA4 DCD 0x22
+		debug024:AD2ACDA8 DCD 0x37
+		debug024:AD2ACDAC DCD 0x59
+		debug024:AD2ACDB0 DCD 0x90
+		debug024:AD2ACDB4 DCD 0xE9
+		debug024:AD2ACDB8 DCD 0x179
+		debug024:AD2ACDBC DCD 0x262 // buf后面拷贝到这里
+		debug024:AD2ACDC0 DCD 0x3DB
+		debug024:AD2ACDC4 DCD 0x63D
+		debug024:AD2ACDC8 DCD 0xA18
+		debug024:AD2ACDCC DCD 0x1055
+	]
+	
+	在malloc0x40的buf ACB651C0，循环16次，拷贝上面的buf数据的前64字节
+	[ // 斐波那契数
+		debug010:ACB651C0 DCD 0
+		debug010:ACB651C4 DCD 1
+		debug010:ACB651C8 DCD 1
+		debug010:ACB651CC DCD 2
+		debug010:ACB651D0 DCD 3
+		debug010:ACB651D4 DCD 5
+		debug010:ACB651D8 DCD 8
+		debug010:ACB651DC DCD 0xD
+		debug010:ACB651E0 DCD 0x15
+		debug010:ACB651E4 DCD 0x22
+		debug010:ACB651E8 DCD 0x37
+		debug010:ACB651EC DCD 0x59
+		debug010:ACB651F0 DCD 0x90
+		debug010:ACB651F4 DCD 0xE9
+		debug010:ACB651F8 DCD 0x179
+		debug010:ACB651FC DCD 0x262
+	]
+	
+	free调第一次开辟的0x50大小buf AD2ACD80
+	
+	继续malloc 16字节大小的buf ACB2A350
+	DexHelper.so:B3BA6046 MOVS            R0, #0x10
+	DexHelper.so:B3BA6048 BLX             malloc_
+	
+	循环16次，逐次向后读取buf ACB651C0(上面拷贝的16个斐波那契数)对应的值，以此值作为偏移off
+	读取global_bytearray_[0x2287 + off + 0x10]的值
+	用这个值和BE8C57BC处保存的md5值(0C A5 D0 6B 7D 7C E6 7B 59 1C CE 45  74 B9 C5 EE)逐一异或
+	把异或后的结果保存在刚刚开辟的起始地址为ACB2A350的16个字节buf中
+	
+	while (i < 16) { // 伪代码
+		r9 = 0; // i
+		// r11 = ACB651C0;读取上面64个字节buf[off]数据, r9 << 2 ,r9 从0开始，每次加1，得到结果是0 4 8 c .......60
+		// 实际对应off从0开始到15，取出对应off的每一个数
+		global_bytearray_off =  ACB651C0_buf[i];
+		data_base = global_bytearray_[0x2287] = B3BD42CC; // 第一次global_bytearray_off为0
+		r1 = *(unsigned char*) (data_base + global_bytearray_off + 0x10); // 第一次取B3BD42CC + 0x10处的值为1C
+		r3 = 获取上面计算的md5(起始地址BE8C57BC)‬，从第一个字节开始取
+		r3 = r3 ^ r1;
+		ACB2A350_buf[i] = r3; // 写入上面的开辟的16字节的buf中
+		r9++;
+	}
+
+	[ // 最后这16个字节的buf值为 10 0E 7B 98 19 8A 7A 66  F4 41 96 AD 56 70 BB FD
+		debug010:ACB2A350 DCD 0x987B0E10
+		debug010:ACB2A354 DCD 0x667A8A19
+		debug010:ACB2A358 DCD 0xAD9641F4
+		debug010:ACB2A35C DCD 0xFDBB7056
+	]
+	// 忘记记录去处了
+	
+	
+	循环把地址B3BCEBCE(文件偏移0005C002)开始的16字节拷贝到栈[stack]:BE8C57CC开始处
+	DexHelper.so:B3BCEBCE DCD 0xE86C9766                                                  
+	DexHelper.so:B3BCEBD2 DCD 0xB038466D           
+	DexHelper.so:B3BCEBD6 DCD 0xD7A55A09
+	DexHelper.so:B3BCEBDA DCD 0xA09ACB0F
+	[stack]:BE8C57CC：66 97 6C E8 6D 46 38 B0  09 5A A5 D7 0F CB 9A A0，经验证这个是后面解密的rc4的密钥
+	最后把这16个字节拷贝到起始地址为ACB2A350处
+	debug010:ACB2A350 DCD 0xE86C9766
+	debug010:ACB2A354 DCD 0xB038466D
+	debug010:ACB2A358 DCD 0xD7A55A09
+	debug010:ACB2A35C DCD 0xA09ACB0F
+	把指向这16个字节的起始地址ACB2A350存储在global_pointer_array_[0x130]处
+	global_pointer_array_[0x130] = ACB2A350
+
+	
+65、走到这里DexHelper.so:B3BA5DE8 BLX             j_pthread_mutex_init_20
+	两次调用pthread_mutex_init
+	DexHelper.so:B3BD7B7C DCD 0                   ; pthread_mutex_t* mutex
+	DexHelper.so:B3BD7B80 DCD 0                   ; pthread_mutex_t* mutex
+	global_pointer_array_[0x120]: pthread_mutex_t互斥锁变量指针
+	global_pointer_array_[0x124]: pthread_mutex_t互斥锁变量指针
+	
+
+66、走到这里
+	DexHelper.so:B3BA5DF6 LDR             R0, =0x186A0
+	DexHelper.so:B3BA5DF8 MOV.W           R1, #0xFFFFFFFF
+	DexHelper.so:B3BA5DFC BL              sub_B3BA4C7C  // 重命名为trans_global_ptr_11c
+	
+	进入函数sub_B3BA4820 被重命名为inverse_oprator_hook_struct，此次没走逻辑
+	
+	取global_pointer_array_[11c]的值为0，判断是否被hook了，只有被hook了取值才为0x186a0
+	if (global_pointer_array_[11c]) { // 没走逻辑
+		对下面介绍的三个结构体
+		逆变换运算
+		
+		不相干的结构和函数返回NULL
+	}
+	return;
+	
+	global_pointer_array_[11c] = B3BD7B78
+	global_pointer_array_ = B3BD7A5C
+
+	++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	0x28大小buf ACB293D0，在调试后面发现hook后的函数有用到这些结构，应该是保存fd相关信息的结构体。
+	例如：
+		保存fd信息（加固dex或者jar open的fd，该fd经过处理，其他非加固相关fd这里不保存）
+		保存mmap地址信息等
+		
+	这里用到了三个结构体，我命名为buf， buf1， buf2这三个作为一个组合
+	另外不同组合可以通过双向链表方式连接
+	buf + 12 指向上一个复合结构体的第一个结构体buf
+	buf + 16 指向下一个复合结构体的第一个结构体buf
+	
+	
+	结构体插入采用倒叙插入，也就是说fd为0x186A0是最后一个fd复合结构体表头
+	该结构体组合为循环双向链表
+	
+	global_pointer_array_[11c]指向的是表头
+	
+	该函数有用到这些结构sub_B3BA4C7C
+	[
+	  v0 = 0x186A0; // 代表fd
+	  v1 = -1; // 链表中索引
+	  v2 = buf1; // 指向buf1， 有可能在链表长度大于1时只存在一个buf1，但是所有buf都指向同一个buf1
+	  v3 = pre buf; // 指向上一个buf
+	  v4 = next buf; // 指向后一个buf
+	  v5 = 0;
+	  v6 = 0;
+	  v7 = bufp; // 指向自己起始的指针
+	  v8 = 4;
+	  v9 = 0x40EB559D;
+	]
+	
+	把该结构的起始指针存储global_pointer_array_[11c]处
+	global_pointer_array_[11c] = buf = ACB293D0
+	
+	0x2c大小buf1 ACB67E80, memset 0 buf1
+	[
+		v0 = buf2;
+		v1 = 0x20;
+		v2 = 5;
+		v3 = 1; // 链表长度
+		v4 = buf + 8; // 第一次指向buf的v2, 间接指向自己 ，链表长度大于1时，指向下一个链表头的v2
+		v5 = 8;
+		v6;
+		v7;
+		v8;
+		v9 = 0x14;
+		v10 = 0xA0111FE1;
+	]
+	
+	中间一些列运算(所谓正变换运算吧)，最终给buf的v5、v6、v9赋值
+	
+	开辟0x180大小buf2 B4E84A80，memset 0 buf2，把buf2指针赋值给buf1的v1
+	[
+		v0 = buf1;
+		v1 = 0;
+		v2 = 0;
+		
+		v(0x15c-4) = buf + 8;
+		v(0x15c) = 1;
+		v(0x160) = 0;
+	]
+	if 1 < a 
+	返回global_pointer_array_[11c]
+	++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	
+67、走到dlopen，打开libc.so，开始执行hook
+	DexHelper.so:B3BA5E06 BLX             j___dl_dlopen_11
+	走进这个函数DexHelper.so:B3BA5E18 BL   pEBF36B3EFD01AD8AE6FDD87E6B840566应该是外传hook函数
+	pEBF36B3EFD01AD8AE6FDD87E6B840566(a, b, c, d) // 重命名为 hook_func ，接受4个参数
+	a为待hook so的名字
+	b为待hook的函数名
+	c为hook的函数的新函数地址，
+	d保存恢复原函数的指令指针（inline hook 替换开始部分字节，保存恢复原函数的指令）
+	
+68、hook __open 
+	hook后地址DexHelper.so:B3BA5564 sub_B3BA5564
+	源地址保存DexHelper.so:B3BD7B9C 0xB4148001; int (*dword_B3BD7B9C)(void) ：最终指向0xB4148001（mmap的36字节，也就是替换后的指令）
+	r5 原地址
+	中间会调用sub_B3BA6764(a, b, c)
+	传递三个参数： a原函数地址，b新函数地址，c保存恢复原函数的指令指针
+
+	代码混淆了看着费劲，判断了传入待hook函数指令的长度，
+	调用memcpy，把将要被hook的函数的前0xE个的指令拷贝出来
+	调用mmap函数，但长度指定为0x24也就是36个字节，
+	mmap返回的地址B4148000，执行了对这36字节的填充
+	debug131:B4148000 DCB    8
+	debug131:B4148001 DCB 0xB5 ; 
+	debug131:B4148002 DCB 0x80 ; €
+	debug131:B4148003 DCB 0xB4 ; 
+	debug131:B4148004 DCB    6
+	debug131:B4148005 DCB 0x4F ; O
+	debug131:B4148006 DCB 0xBE ; 
+	debug131:B4148007 DCB 0x46 ; F
+	debug131:B4148008 DCB 0x80 ; €
+	debug131:B4148009 DCB 0xBC ; 
+	debug131:B414800A DCB 0xF0 ; 
+	debug131:B414800B DCB 0x47 ; G
+	debug131:B414800C DCB 0x1D
+	debug131:B414800D DCB 0xEE ; 
+	debug131:B414800E DCB 0x70 ; p
+	debug131:B414800F DCB  0xF
+	debug131:B4148010 DCB 0x70 ; p
+	debug131:B4148011 DCB 0x47 ; G
+	debug131:B4148012 DCB    2
+	debug131:B4148013 DCB 0x44 ; D
+	debug131:B4148014 DCB 0x78 ; x
+	debug131:B4148015 DCB 0x47 ; G
+	debug131:B4148016 DCB 0xC0 ; 
+	debug131:B4148017 DCB 0x46 ; F
+	debug131:B4148018 DCB    4
+	debug131:B4148019 DCB 0xF0 ; 
+	debug131:B414801A DCB 0x1F
+	debug131:B414801B DCB 0xE5 ; 
+	debug131:B414801C DCB 0xB5 ; 
+	debug131:B414801D DCB 0x75 ; u
+	debug131:B414801E DCB 0xED ; 
+	debug131:B414801F DCB 0xB6 ; 
+	debug131:B4148020 DCB 0x2C 
+	debug131:B4148021 DCB 0x66 ; f
+	debug131:B4148022 DCB 0xE9 ; 
+	debug131:B4148023 DCB 0xB6 ;
+	调用mprotect对这段内存进行属性修改，修改为PROT_READ | PROT_EXEC，然后调用flashcache刷新指令
+	对应上面指令
+	debug131:B4148000 AREA debug131, CODE, ALIGN=0
+	debug131:B4148000 ; ORG 0xB4148000
+	debug131:B4148000 CODE32
+	debug131:B4148000 STRLT           R11, [R0],#0x508
+	debug131:B4148004 LDRMIT          R4, [LR],R6,LSL#30
+	debug131:B4148008 LDRMIB          R11, [R0,R0,LSL#25]!
+	debug131:B414800C SVCEQ           0x70EE1D
+	debug131:B4148010 STRMI           R4, [R2],#-0x770
+	debug131:B4148010 ; ---------------------------------------------------------------------------
+	debug131:B4148014 DCD 0x46C04778
+	debug131:B4148018 ; ---------------------------------------------------------------------------
+	debug131:B4148018 LDR             PC, =(loc_B6ED75B4+1) // 指向被hook函数的第37个指令处（前36个被替换了）
+	debug131:B4148018 ; ---------------------------------------------------------------------------
+	debug131:B414801C off_B414801C DCD loc_B6ED75B4+1         ; DATA XREF: debug131:B4148018r
+	debug131:B4148020 DCD 0xB6E9662C
+	
+	继续调用mprotect修改原函数前0xE个指令对应map的属性为 rwx
+	然后修改被hook的函数的前0xE指令，包括某些指令变成nop，blx指向新地址
+	调用mprotect，修改debug056:B4E01130开始的0x4778大小的map属性为rwx，然后刷新cache，
+	这里应该用了hook框架，具体hook流程不在详细分析
+	
+	
+	hook后函数变化：
+	
+	
+	
+69、hook __openat
+	替换的地址DexHelper.so:B3BA5548
+	中间跳转地址DexHelper.so:B3BD7B98  0xB413A000
+	
+	hooked_openat函数变化：
+	先调用原openat得到实际fd
+	在调用B3BA50FC函数，该函数接受两个参数
+	参数一文件fd
+	参数二文件路径
+	
+	首先如果 第一个参数文件fd & 0x80000000) != 0 函数直接退出返回-1
+	循环调用sub_B3BA4AE0，对比是否包含.cache/classes.dex、.cache/classes.jar字符串
+		传入参数：
+		参数1：/data/data/xxxx/.cache/classes.jar
+		参数2分别为：.cache/classes.dex、.cache/classes.jar
+		取得参数1、参数2长度，对比两者长度
+		如果参数2长度大于参数1直接返回0
+		否则取参数一最后字符串(长度等于参数2)和参数2进行对比
+		得到结果 >> 5，返回结果
+		实际上匹配返回1，否则返回0
+		
+	调用DexHelper.so:B3BA5148 BL   trans_global_ptr_11c
+	该函数功能：根据传入fd，在复合fd结构体链表查找对应结构体，存在直接返回
+	不存在就创建新的符合结构体组合，建立双向链表关系，对组合结构进行数学变换
+	
+	传入参数：
+		参数1：fd
+		参数2：global_pointer_array_[11c]
+	如果已经存在该fd对应的结构体组合，直接返回
+	如果不存在，首先创建66 描述的第一个结构体buf，对这个buf进行初始化，特别第一个字段赋值为fd
+	取global_pointer_array_[71]，如果非空建立双向链表关系，详情见66
+	如果为空建立新的buf1，buf2建立和刚刚创建的buf的关系
+	之后就是进行一些列的数学运算，经观察新创建的buf的 v5 v6 都变成0，v9也变化了
+	
+	debug010:ACB293D0 DCD 0x186A0                             ; 第一个buf
+	debug010:ACB293D4 DCD 0xFFFFFFFF
+	debug010:ACB293D8 DCD 0xACB67E80
+	debug010:ACB293DC DCD 0
+	debug010:ACB293E0 DCD 0xACB293F8
+	debug010:ACB293E4 DCD 0
+	debug010:ACB293E8 DCD 0
+	debug010:ACB293EC DCD 0xACB293D0
+	debug010:ACB293F0 DCD 4
+	debug010:ACB293F4 DCD 0x40EB559D
+	debug010:ACB293F8 DCD 0x18                                ; 下一个第一个buf
+	debug010:ACB293FC DCD 1
+	debug010:ACB29400 DCD 0xACB67E80
+	debug010:ACB29404 DCD 0xACB293D0
+	debug010:ACB29408 DCD 0
+	debug010:ACB2940C DCD 0x632F7374  // 改变
+	debug010:ACB29410 DCD 0x7373616C  // 改变
+	debug010:ACB29414 DCD 0xACB293F8
+	debug010:ACB29418 DCD 4
+	debug010:ACB2941C DCD 0x10  // 改变
+	变换后
+	debug010:ACB293D0 DCD 0x186A0                             ; 第一个buf
+	debug010:ACB293D4 DCD 0xFFFFFFFF
+	debug010:ACB293D8 DCD 0xACB67E80
+	debug010:ACB293DC DCD 0
+	debug010:ACB293E0 DCD 0xACB293F8
+	debug010:ACB293E4 DCD 0
+	debug010:ACB293E8 DCD 0
+	debug010:ACB293EC DCD 0xACB293D0
+	debug010:ACB293F0 DCD 4
+	debug010:ACB293F4 DCD 0x40EB559D
+	debug010:ACB293F8 DCD 0x18                                ; 下一个第一个buf
+	debug010:ACB293FC DCD 1
+	debug010:ACB29400 DCD 0xACB67E80
+	debug010:ACB29404 DCD 0xACB293D0
+	debug010:ACB29408 DCD 0
+	debug010:ACB2940C DCD 0
+	debug010:ACB29410 DCD 0
+	debug010:ACB29414 DCD 0xACB293F8
+	debug010:ACB29418 DCD 4
+	debug010:ACB2941C DCD 0xD6AF3C42
+
+	取p3A717B8EABE9B996D57B1C777CD49945(我这里为0)走分支
+	获取dexsize，循环 i=1++ < dexsize = 5, 对比字符串
+	.cache/classes2.dex、.cache/classes2.jar、空指针
+	.cache/classes3.dex、.cache/classes3.jar、空指针
+	.cache/classes4.dex、.cache/classes4.jar、空指针
+	.cache/classes5.dex、.cache/classes5.jar、空指针
+	这里拆了几个dex就比几次，没命中就正常返回fd，否则返回0，应该是防止dump
+	
+
+70、hook __mmap2
+	替换的地址DexHelper.so:B3BA59B4
+	中间跳转地址DexHelper.so:B3BD7BAC  0xB4139000
+	
+	hook后函数变化：
+	如果是关联加固相关文件fd，则变换计算，否则直接调用原mmap返回
+	
+	
+	
+71、中间调用了DexHelper.so:B3BA5E70 BL sub_B3BA4B1C 得到字符串close
+
+72、hook close
+	替换的地址DexHelper.so:B3BA49E4 hooked_close_ 
+	中间跳转地址DexHelper.so:B3BD7B84 0xB4138000
+	
+	hook后函数变化：
+	该函数进行了一些列fd转换得到最终真正的fd（如果和加固的dex和jar相关，否则就是原fd），执行系统close
+	
+	
+73、 hook write
+	替换的地址DexHelper.so:B3BA5094 hooked_write_ 
+	中间跳转地址DexHelper.so:B3BD7B94 0xB4137000
+	
+	hook后函数变化：
+	
+	
+74、hook read
+	替换的地址DexHelper.so:B3BA5958 hooked_read_ 
+	中间跳转地址DexHelper.so:B3BD7BA8 0xB4136000
+	
+	
+	hook后函数变化：
+	伪代码
+
+	  if ( get_trans_dexorjar_fd_(nfd_) ) { // 得到转换后的fd结构体
+		v6 = lseek_12(nfd__, 0, 1); // 先seek
+		v7 = origin_read_(nfd__, buf__, buflen__); // 原始读
+		if ( v7 > 0 )
+		  decrypt_jar_(v6, buf__, v7); // 解密
+		result = v7;
+	  } else { // 如果不是加固相关文件fd， 直接调用原始读
+		result = origin_read_(nfd__, buf__, buflen__);
+	  }
+	  
+	  return result;
+
+
+75、hook munmap
+	替换的地址DexHelper.so:B3BA4B64 hooked_munmap_
+	中间跳转地址DexHelper.so:B3BD7B88 0xB4135000
+	
+	hook后函数变化：
+	传入地址做判断是否是系统发生的mmap，
+	如果是系统发生的mmap直接调用原始munmap
+	否则经过一系列运行得到实际的地址调用原始munmap，
+	然后在更新对应的保存和mmap相关信息的结构体
+	
+76、hook msync
+	替换的地址DexHelper.so:B3BA5694 hooked_msync_
+	中间跳转地址DexHelper.so:B3BD7BA0 0xB4134000
+	
+	hook后函数变化：
+
+77、hook pread64
+	替换的地址DexHelper.so:B3BA5920 hooked_pread64_ 
+	中间跳转地址DexHelper.so:B3BD7BA4 0xB4133000
+	
+	hook后函数变化：
+	伪代码：
+	v7 = origin_pread64_(a1, a2, a3); // 先调用原pread64
+	if ( v7 > 0 && get_trans_dexorjar_fd_(v5) ) // 匹配得到对应fd（对加固的dex和jar有效，其他不相关文件不受影响）
+		decrypt_jar_(a5, v6, v7); // 解密对应 a5指定解密模式相关，v6解密buf地址，v7解密数据长度
+	return v7;
+	
+	
+78、hook ftruncate64
+	替换的地址DexHelper.so:B3BA4FFC hooked_ftruncate64_  
+	中间跳转地址DexHelper.so:B3BD7B90 0xB4132000
+	
+	hook后函数变化：
+	
+	
+	
+79、走到这个函数
+	DexHelper.so:B3B94AAA BL  _ZNK33p15B4FEDE8904BF61665E9A9AF7EE9D2EIPFiPcEE33p3E42DCE263123F5F486573D2D3F48826Ev
+	垃圾代码
+	
+	
+80、调用open打开/data/data/xxxx/.cache/classes.dex
+	进入hook函数 openat，见69
+	这里为了防止dump，返回了-1，但是把真正的fd保存到hook fd结构中了
+	判断是否支持art，进行栈变量赋值
+	
+	
+	
+81、下面进入hook libart 函数
+	执行到DexHelper.so:B3B94B72 BL _Z33pE3BC0541C4BFC23E0DF9C3909FF40C7BI33p15B4FEDE8904BF61665E9A9AF7EE9D2EIPFvvEEJEEvT_DpOT0_
+	需要进入这个函数，因为这里DexHelper.so:B3B932EC BLX   R0会进入pBA0D6AE6B84C702BBF913B88D38A1961 hook libart
+	
+	进行hook libart.so OpenDexFilesFromOat
+	_ZN3art11ClassLinker19OpenDexFilesFromOatEPKcS2_PNSt3__16vectorINS3_12basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEENS8_ISA_EEEEPNS4_IPKNS_7DexFileENS8_ISG_EEEE
+	
+	替换的地址DexHelper.so:B3BA1770 hooked_OpenDexFilesFromOat_  
+	中间跳转地址DexHelper.so:B3BD7B90 B4131000
+	
+	hook后函数功能：
+	先匹配dex_location是否包含字符串.cache/classes.jar
+	如果不包含直接调用原始函数
+	否则调用系统的函数
+	bool DexFile::Open(const char* filename, const char* location, std::string* error_msg,
+					   std::vector<const DexFile*>* dex_files)
+	并且始终返回false，防止你dump
+	
+	
+	
+82、hook libart.so  DexFile::Open 该导出函数我手机没有
+	_ZN3art7DexFile4OpenEPKcS2_PNSt3__112basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEEPNS3_6vectorINS3_10unique_ptrIKS0_NS3_14default_deleteISD_EEEENS7_ISG_EEEE
+	
+	// 忘记看流程了
+	_ZN3art7DexFile4OpenEPKcS2_PNSt3__112basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEEPNS3_6vectorIPKS0_NS7_ISD_EEEE
+	记录这个地址到global_pointer_array_[51] = 0xB4BEFDAD
+	
+	进行hook libart.so OpenDexFilesFromOat不同手机可能导出函数名不一样，我手机是上面hook的导出函数，这个我手机没有
+	_ZN3art11ClassLinker19OpenDexFilesFromOatEPKcS2_PNSt3__16vectorINS3_12basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEENS8
+	
+	替换的地址DexHelper.so:B3BA1A40 _Z33p67B4A9514BBCA4BA6D23C5DCB7755C21PvPKcS1_S_ 
+	中间跳转地址DexHelper.so:B3BD7B1C ; int (__fastcall *p94BA59FCA81F12B5E8F941949D2188D4) 
+	
+	
+83、hook libart.so art::DexFileVerifier::Verify(art::DexFile const*, unsigned char const*,......)
+	_ZN3art15DexFileVerifier6VerifyEPKNS_7DexFileEPKhjPKcPNSt3__112basic_stringIcNS8_11char_traitsIcEENS8_9allocatorIcEEEE
+	hook后直接 返回true（我之前还在琢磨呢，他们对dex code结构乱改，怎么通过校验的）
+	
+	替换的地址DexHelper.so:B3B9E178 ; p1D7C04746FE9F8774D8A2C513FF9F0F8
+	中间跳转地址DexHelper.so:B3BD7B08 p79748E82CFA1FAC9070370E3D34A2FFD  0xB4130003
+	
+	
+84、进入DexHelper.so:B3B94B7A BL              loc_B3B8C3C4
+	得到字符串
+	/data/data/xxxx/.cache/classes.jar BE8C5344
+	/data/data/xxxx/.cache/classes.dex BE8C5444
+	/data/data/xxxx/.cache 			   BE8C5544
+	创建NewStringUTF
+	/data/data/xxxx/.cache/classes.jar 00200199
+	/data/data/xxxx/.cache/classes.dex 0020019D
+	/data/data/xxxx/.cache 			   002001A1 
+	/data/app/xxxx-1/lib/arm		   002001A5
+	/data/app/xxxx-1/base.apk		   002001A9
+	判断是否支持art
+	调用env->FindClass查找com/secneo/apkwrapper/Helper 002001AD
+	env->FindClass查找java/lang/Class 002001B1
+	获得字符串getClassLoader ()Ljava/lang/ClassLoader;
+	调用GetMethodID获取Class的getClassLoader的MethodID 0x70AC3848
+	调用CallObjectMethod获取Helper对应的ClassLoader对象002001B5
+	获取Helper的install(install (Ljava/lang/ClassLoader;Ljava/lang/String;Ljava/lang/String;)V)方法ID 75F227B8
+	DexHelper.so:B3B8C7DA BL   _ZN7_JNIEnv20CallStaticVoidMethodEP7_jclassP10_jmethodIDz 
+	调用install 安装dex
+	第一个参数 env
+	第二个参数 Helper class
+	第三个参数 install method id
+	第四个参数 ClassLoader对应jobject
+	第五个参数 /data/data/xxxx/.cache的NewStringUTF
+	第六个参数 /data/data/xxxx/.cache/classes.jar的NewStringUTF
+	
+	
+85、先进入两次hook write，没做什么不分析
+	进入DexFile_openDexFileNative
+	进入hooked_OpenDexFilesFromOat_ _Z33p4F0B45B0D8C92DBD48035481516CB0BDPvPKcS1_S_S_
+	传递参数
+		dex_location = /data/data/xxxx/.cache/classes.jar
+		oat_location = /data/data/xxxx/.cache/classes.dex
+		std::vector<std::string>* error_msgs = [stack]:BE8C3668
+		std::vector<const DexFile*>* dex_files = debug010:ACB2A380
+	
+	进入DexHelper.so:B3BA178C BL  is_contain_cacheclassesjar_str判断是否包含字符串.cache/classes.jar
+	调用_ZNSsC2ERKSaIcE构造一个结构std::string BE8C35AC
+	[stack]:BE8C35AC DCD 0
+	[stack]:BE8C35B0 DCD 0
+	[stack]:BE8C35B4 DCD 0xB4E5C280 // 指向
+	[stack]:BE8C35B8 DCD 0xB4DFCA64
+	[stack]:BE8C35BC DCD 0xBE8C35AC
+	[stack]:BE8C35C0 DCD 0xBE8C35AC
+	[
+		v0 = 0;
+		v1;
+		v2;
+		v3;
+		v4 = v0;
+		v5 = v0 ;
+	
+	]
+	
+	调用原始函数bool DexFile::Open(const char* filename, const char* location, std::string* error_msg,
+					   std::vector<const DexFile*>* dex_files)
+	传入参数
+		dex_location = /data/data/xxxx/.cache/classes.jar
+		oat_location = /data/data/xxxx/.cache/classes.jar
+		std::string* error_msg = C2ERKS = BE8C35AC
+		std::vector<const DexFile*>* dex_files = debug010:ACB2A380 // 返回0
+
+
+	进入hooked_openat函数，见69 
+	OpenAndReadMagic进入hooked_read函数，见74，先读取/data/data/xxxx/.cache/classes.jar起始4个字节92 cd 65 be
+	[stack]:BE8C3558 DCB 0x92 ; 
+	[stack]:BE8C3559 DCB 0xCD ; 
+	[stack]:BE8C355A DCB 0x65 ; e
+	[stack]:BE8C355B DCB 0xBE 
+	调用解密函数，下面会提到，解密后为0x4034B50
+	[stack]:BE8C3558 DCB 0x50 ; P
+	[stack]:BE8C3559 DCB 0x4B ; K
+	[stack]:BE8C355A DCB    3
+	[stack]:BE8C355B DCB    4
+	看到PK了吧，这个是zip头，0x4034B50为zip magic
+	返回到DexFile::Open，验证zip头
+	
+	进入ZipArchive* ZipArchive::OpenFromFd在次进入hooked_read
+	这次从文件偏移00746284处读取0x10015个字节，到ACB81000
+	
+	解密0x10015个字节,00746284 + 0x10015 = 0x756299(文件结尾)
+	也就是解密从00746284处到文件尾
+	这其中包含zip 的Central Directory(我这里占81个字节) 和 End of central directory信息
+	
+	解密后数据dump到746284_to_fend.txt
+	从文件00746284偏移处读取0x10015大小的数据
+	这都是迷惑人的(防止你一眼看出来)，其实从文件偏移7560ea开始是Central Directory信息
+	
+	
+86、进入android::FileMap::create
+	进入了hooked_mmap2_，读取尾部数据并解密
+	// BE8C3430 DCB 0x18 r7
+	mmap了 0x283个字节，是从classes0.dex的0x756000偏移处开始映射到内存B4136118，这代表Central Directory
+	调用sub_B3BA5580循环0x283次把之前mmap的那0x283个字节异或解密(x ^ 0xac)
+	我dump出保存在afterdex6000.txt文件中了（这里面是关于classes0.jar中多dex的描述的结构体）
+	sub_B3BA5580 异或0xac
+	
+	最终保存地址B4136000
+	
+	这些结构也用于还原加固dex
+	开辟0x30大小buf
+	debug010:ACB67E50 DCD 0xB4136000 // 文件尾部解密出来的数据的指针
+	debug010:ACB67E54 DCD 0xB4137000 // 文件尾部未解密的原始数据的指针
+	debug010:ACB67E58 DCD 0x18 // 文件对应fd
+	debug010:ACB67E5C DCD 0x756000 // 文件尾部数据起始文件偏移
+	debug010:ACB67E60 DCD 0xACB67EB0 // 指向buf1的地址
+	debug010:ACB67E64 DCD 0
+	debug010:ACB67E68 DCD 0
+	debug010:ACB67E6C DCD 0
+	debug010:ACB67E70 DCD 0
+	debug010:ACB67E74 DCD 0xACB67E50 // 指向自己其实地址
+	debug010:ACB67E78 DCD 4
+	[
+		 v0 = 上面异或出来的0x283大小数据的指针;
+		 v1 = 为异或的数据指针; 
+		 v2 = 0x18; // /data/data/xxxx/.cache/classes.jar的文件fd
+		 v3 = 0075600; // 该数据在文件中的偏移
+		 v4 = buf1;
+		 v5 = 0;
+		 v6 = 0;
+		 v7 = 0;
+		 v8 = 0;
+		 v9 = buf; // 指向自己的指针
+		 v10 = 4;
+		 v11 = 0x9906B711;
+	]
+	
+	在开辟0x2c大小buf1, memset全部填充0
+	debug010:ACB67EB0 DCD 0xB4E84C00 // afterdex_buf1
+	debug010:ACB67EB4 DCD 0x20
+	debug010:ACB67EB8 DCD 5
+	debug010:ACB67EBC DCD 1
+	debug010:ACB67EC0 DCD 0xACB67E60
+	debug010:ACB67EC4 DCD 0x10
+	debug010:ACB67EC8 DCD 0
+	debug010:ACB67ECC DCD 0
+	debug010:ACB67ED0 DCD 0
+	debug010:ACB67ED4 DCD 0
+	debug010:ACB67ED8 DCD 0xA0111FE1
+	
+	[
+		 v0 = buf2;
+		 v1 = 0x20;
+		 v2 = 5; // dex总数
+		 v3 = 0; // dex计数，循环用(从0开始，每次累计1和自己的v2对比)，释放第几个dex
+		 v4 = 指向buf的v4，实际就是间接指向自己
+		 v5 = 0x10; // 不知道啥计数
+		 v6 = 0;
+		 v7 = 0;
+		 v8 = 0;
+		 v9 = 0; 
+		 v10 = 0;
+		 v11 = 0xA0111FE1;
+	]
+	
+	在开辟0x180大小buf2（B4E84C00）, memset全部为0
+	debug056:B4E84C00 DCD 0xACB67E60
+	debug056:B4E84C04 DCD 1
+	[
+		v0 = 0xACB67E60 ; buf1
+		v1 = 1
+
+		……
+		v0 + 0xcc ; // 指向buf1
+		vxx = 1; //计数
+	]
+	
+	最后把global_pointer_array_[85] = ACB67E50 // 指向after dex buf指针
+	
+87、走到libart的调用art::DexFile::OpenFromZip流程，进入
+	const DexFile* DexFile::Open(const ZipArchive& zip_archive, const char* entry_name,
+                             const std::string& location, std::string* error_msg,
+                             ZipOpenErrorCode* error_code) 
+	其中pread64进入hook函数hooked_pread64
+	循环解密解压
+	
+	分析这里可以得到classes.jar是一个经过加密的zip压缩包
+	+------------+
+	|zip压缩包   |
+	|里面包含多  | 执行时先读取zipHeader解密，得到file_name_length，在继续读取
+	|个dex       | filename解密，之后读取整个压缩大小，解密解压到mmap内存中
+	|已加密      | 解密算法为变种rc4 或 异或0xac，解密算法sub_B3BA5818重命名为decrypt_jar_(int a, void* b,int c)
+	|            | 参数a一个数值，应该代表文件偏移，该值用于内部判断是走rc4还是走异或， a >= 0x20000 走异或，否则rc4+异或
+	|            | 参数b 解密数据指针
+	|            | 参数c 解密数据长度
+	+------------+
+	|zip尾部有   | 解密直接异或0xac，文件偏移0x746284，到文件尾长度10015
+	|            | 从文件偏移0x756000开始为0x283大小的数据，其中从偏移ea(0x7560ea)处为zip结构的Central Directory，
+	|多dex的信息 | 和16字节大小的End of central directory
+	|的 已加密， | 解密算法sub_B3BA5580，该解密算法不同sub_B3BA5818
+	|            | 
+	+------------+
+	
+	先读取从classes.jar文件开始偏移处读取0x1e个数据，然后调用sub_B3BA5818解密得到zip头
+	(解密是长度小于0x20000用^0xac,否则用变种的rc4
+	rc4 key：[0x66,0x97,0x6C,0xE8,0x6D,0x46,0x38,0xB0,9,0x5A,0xA5,0xD7, 0xF,0xCB,0x9A,0xA0])
+	解密算法已保存到(jarcrypt.cpp)
+	 ---------------------------------------------------
+	第一次得到classes.dex相关zip头时用rc4，文件偏移 < 0x20000， BE8C3404
+	第二次得到classes2.dex相关头时用异或 
+	后面都用异或解密
+	----------------------------------------------------
+	解密后才能经过系统zip验证
+	
+	刚刚调用OpenArchive，进入hooked_pread64，读取开始30(0x1e)个字节的zip头，对应结构：
+	struct ZipFileHeader {
+		uint32_t magic = 0x4034b50;
+		uint16_t version = 0x14;
+		uint16_t flags = 0x8;
+		uint16_t compression_method;
+		uint16_t lastmodtime;
+		uint16_t lastmoddate;
+		uint32_t crc32_cs;
+		uint32_t compress_size;
+		uint32_t file_size;
+		uint16_t file_name_length;
+		uint16_t extra_field_len; // 扩展区长度
+	} __attribute__((packed));          
+
+	zip file data 地址 = 0x1e + file_name_length + extra_field_len
+
+	[stack]:BE8C3404 DCD 0xBE65CD92
+	[stack]:BE8C3408 DCD 0x71B747FD
+	[stack]:BE8C340C DCD 0x7F35984D
+	[stack]:BE8C3410 DCD 0x70EFECD8
+	[stack]:BE8C3414 DCD 0x9679F417
+	[stack]:BE8C3418 DCD 0x95AE2A7A
+	[stack]:BE8C341C DCD 0x1E52B41B
+	[stack]:BE8C3420 DCB    2
+	[stack]:BE8C3421 DCB 0x97 
+	调用sub_B3BA5818解密后数据：
+	[stack]:BE8C3404 DCD 0x4034B50
+	[stack]:BE8C3408 DCW 0x14
+	[stack]:BE8C340A DCW 0
+	[stack]:BE8C340C DCW 8 // 小端应该8在前
+	[stack]:BE8C340E DCW 0xA60C
+	[stack]:BE8C3410 DCW 0x4EBD
+	[stack]:BE8C3412 DCD 0x2014630C
+	[stack]:BE8C3416 DCD 0x236452 压缩后大小
+	[stack]:BE8C341A DCD 0x587358 文件大小
+	[stack]:BE8C341E DCW 0xB
+	[stack]:BE8C3420 DCW 0x1C
+	
+	在继续读取B个字节 ACB2A390,解密为classes.dex 
+	走到libart.so的MemMap* ZipEntry::ExtractToMemMap(const char* zip_filename, const char* entry_filename,
+                                  std::string* error_msg)对dex进行解压
+	zip_filename = /data/data/xxxx/.cache/classes.jar
+	entry_filename = classes.dex
+	error_msg 略
+	
+	进入hooked_openat_函数，传入文件句柄为/dev/ashmem，中间略
+	又一次进入 hooked_mmap2_逻辑忽略，长度为00588000，其实就是从classes.jar解压classes.dex到内存，返回A3B78000
+	调用art::MemMap::MemMap(const std::string& name, byte* begin, size_t size, void* base_begin, size_t base_size,
+         int prot, bool reuse) 
+	
+	name = classes.dex extracted in memory from /data/data/xxxx/.cache/classes.jar
+	begin = classes.jar:A3B78000
+	size = 00587358
+	base_begin = begin
+	base_size = 00588000
+	prot = rw
+	reuse = false
+	
+	进入hooked_close，无关紧要因为是关闭/dev/ashmem，而非加固的dex或者jar，函数不做处理
+	调用ExtractToMemory进入InflateToFile解压
+	多次进入hooked_read_(第一次从0x45 = 0x1e + 0xb + 0x1c) BE8B33AC
+	经过fd转换后，调用原始read读取数据到内存中(每次读取0x8000个字节数据，这个是libart zip实现，无需关注)
+	然后调用解密算法解密，在解压缩到之前mmap的内存中
+	
+	解压之后我把它dump出来了命名为claeses_dec.dex
+	和之前用friad hook dump出来的做对比，发现它已经把code回填回去了，
+	我跟了好几遍都发现dex是完整的
+	
+	这里我就有一个疑问了，classes0.jar中的dex就是完整的
+	也确实我解密后发现是完整的
+	// 可能后面为了防止dump，而对相关函数hook做了dex修改
+	// 还是说我调试的版本是这个样子，如果是这个样子，那不是拿dex code抽取做幌子嘛
+	
+	
+	解压后调用
+	static const DexFile* DexFile::OpenMemory(const byte* base,
+		   size_t size,
+		   const std::string& location,
+		   uint32_t location_checksum,
+		   MemMap* mem_map, std::string* error_msg) // 在内存中打开该dex
+		base = A3B78000
+		size = 00587358
+		location =  /data/data/xxxx/.cache/classes.jar
+		location_checksum = 2014630C
+		mem_map = ACB29498 [
+							debug010:ACB29498 DCD 0x61
+							debug010:ACB2949C DCD 0x5B
+							debug010:ACB294A0 DCD 0xACB44760 //classes.dex extracted in memory from /data/data/xxxxlication/.cache/classes.jar
+							debug010:ACB294A4 DCD 0xA3B78000 // mmap base
+							debug010:ACB294A8 DCD 0x587358 // file_size
+							debug010:ACB294AC DCD 0xA3B78000
+							debug010:ACB294B0 DCD 0x588000 // mem size
+							debug010:ACB294B4 DCD 3 // rw
+							debug010:ACB294B8 DCB 0 //false
+							]
+		error_msg = [stack]:BE8C35AC 这个参数无所谓
+		   
+	返回DexFile* ACB22380
+	
+	debug010:ACB22380 DCD 0xB4DF9240          // vt
+	debug010:ACB22384 DCD 0xA3B78000 // begin
+	debug010:ACB22388 DCD 0x587358 // size
+	debug010:ACB2238C DCD 0x41 // std::string location
+	debug010:ACB22390 DCD 0x36
+	debug010:ACB22394 DCD 0xACB65280
+	debug010:ACB22398 DCD 0x2014630C // location_checksum
+	debug010:ACB2239C DCD 0xACB29498 // mem_map
+	debug010:ACB223A0 DCD 0xA3B78000 // header
+	debug010:ACB223A4 DCD 0xA3B78070 // string id
+	debug010:ACB223A8 DCD 0xA3B9FEE4 // type id
+	debug010:ACB223AC DCD 0xA3BBE1C8
+	debug010:ACB223B0 DCD 0xA3C2D658
+	debug010:ACB223B4 DCD 0xA3BA639C
+	debug010:ACB223B8 DCD 0xA3C7B7A8
+	debug010:ACB223BC DCD 0
+	debug010:ACB223C0 DCD 0
+	debug010:ACB223C4 DCD 0x3B
+		  
+	然后进行dex verify(hook了dex verify, return true)
+
+
+88、重复循环加载解压剩余dex
+	第二次（classes2.dex项目）的zip header, 文件偏移00236497
+		[stack]:BE8C3404 DCD 0x4034B50
+		[stack]:BE8C3408 DCW 0x14
+		[stack]:BE8C340A DCW 0
+		[stack]:BE8C340C DCW 8
+		[stack]:BE8C340E DCW 0xA619
+		[stack]:BE8C3410 DCW 0x4EBD
+		[stack]:BE8C3412 DCD 0x88ED0FEA // checksum crc32
+		[stack]:BE8C3416 DCD 0x183EA6
+		[stack]:BE8C341A DCD 0x41DDC8 // file_size
+		[stack]:BE8C341E DCW 0xC
+		[stack]:BE8C3420 DCW 0x1C
+	第三次（classes3.dex项目）的zip header，文件偏移003ba383
+		[stack]:BE8C3404 DCD 0x4034B50
+		[stack]:BE8C3408 DCW 0x14
+		[stack]:BE8C340A DCW 0
+		[stack]:BE8C340C DCW 8
+		[stack]:BE8C340E DCW 0xA614
+		[stack]:BE8C3410 DCW 0x4EBD
+		[stack]:BE8C3412 DCD 0x6B9D1512
+		[stack]:BE8C3416 DCD 0x34E52F
+		[stack]:BE8C341A DCD 0x830A80
+		[stack]:BE8C341E DCW 0xC
+		[stack]:BE8C3420 DCW 0x1C
+	第四次（classes4.dex项目）的zip header，文件偏移007088f8
+		[stack]:BE8C3404 DCD 0x4034B50
+		[stack]:BE8C3408 DCW 0x14
+		[stack]:BE8C340A DCW 0
+		[stack]:BE8C340C DCW 8
+		[stack]:BE8C340E DCW 0xA615
+		[stack]:BE8C3410 DCW 0x4EBD
+		[stack]:BE8C3412 DCD 0xAA014098
+		[stack]:BE8C3416 DCD 0x373A0
+		[stack]:BE8C341A DCD 0x81A24
+		[stack]:BE8C341E DCW 0xC
+		[stack]:BE8C3420 DCW 0x1C
+	第五次（classes5.dex项目）的zip header，文件偏移0073fcde
+		[stack]:BE8C3404 DCD 0x4034B50
+		[stack]:BE8C3408 DCW 0x14
+		[stack]:BE8C340A DCW 0
+		[stack]:BE8C340C DCW 8
+		[stack]:BE8C340E DCW 0xA60D
+		[stack]:BE8C3410 DCW 0x4EBD
+		[stack]:BE8C3412 DCD 0x8BC95BAF
+		[stack]:BE8C3416 DCD 0x163C6
+		[stack]:BE8C341A DCD 0x30978
+		[stack]:BE8C341E DCW 0xC
+		[stack]:BE8C3420 DCW 0x1C
+	读取完到文件偏移007560ea, 可以验证完全是zip压缩包
+	
